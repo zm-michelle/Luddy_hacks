@@ -241,6 +241,7 @@ def run_ocr_image(
     charset: str = DEFAULT_CHARSET,
     rec_height: int = DEFAULT_RECOGNIZER_HEIGHT,
     rec_width: int = DEFAULT_RECOGNIZER_WIDTH,
+    split_lines_without_detector: bool = False,
 ) -> dict[str, Any]:
     image_path = Path(image_path)
     image = Image.open(image_path).convert("L")
@@ -250,8 +251,14 @@ def run_ocr_image(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     boxes: list[tuple[int, int, int, int]]
+    used_line_split_fallback = False
     if skip_detector or detector is None:
         boxes = [(0, 0, image.width, image.height)]
+        if split_lines_without_detector and image.height >= 120 and image.width >= 200:
+            split_boxes = split_regions_into_lines(image, boxes)
+            if split_boxes:
+                boxes = split_boxes
+                used_line_split_fallback = True
         prob_map = None
     else:
         boxes, prob_map = detect_text_regions(
@@ -264,6 +271,11 @@ def run_ocr_image(
         if not boxes:
             boxes = [(0, 0, image.width, image.height)]
         boxes = split_regions_into_lines(image, boxes)
+        if len(boxes) <= 1 and image.height >= 120 and image.width >= 200:
+            fallback_boxes = split_regions_into_lines(image, [(0, 0, image.width, image.height)])
+            if len(fallback_boxes) > len(boxes):
+                boxes = fallback_boxes
+                used_line_split_fallback = True
 
     region_results: list[dict[str, Any]] = []
     texts: list[str] = []
@@ -288,7 +300,8 @@ def run_ocr_image(
         "image": image_path.name,
         "path": str(image_path),
         "text": "\n".join(texts),
-        "regions": region_results if not skip_detector and detector is not None else [],
+        "regions": region_results if (not skip_detector and detector is not None) or split_lines_without_detector else [],
+        "used_line_split_fallback": used_line_split_fallback,
     }
 
 
@@ -307,6 +320,7 @@ def run_ocr_folder_infer(
     rec_height: int = DEFAULT_RECOGNIZER_HEIGHT,
     rec_width: int = DEFAULT_RECOGNIZER_WIDTH,
     log_every: int = 10,
+    split_lines_without_detector: bool = False,
 ) -> list[dict[str, Any]]:
     input_dir = Path(input_dir)
     output_dir = Path(output_dir)
@@ -317,6 +331,7 @@ def run_ocr_folder_infer(
     results: list[dict[str, Any]] = []
     progress = ProgressLogger("ocr folder", len(image_paths), log_every)
     total_regions = 0
+    fallback_count = 0
     for step, image_path in enumerate(image_paths, start=1):
         result = run_ocr_image(
             image_path=image_path,
@@ -332,16 +347,18 @@ def run_ocr_folder_infer(
             charset=charset,
             rec_height=rec_height,
             rec_width=rec_width,
+            split_lines_without_detector=split_lines_without_detector,
         )
         (text_dir / f"{image_path.stem}.txt").write_text(result["text"])
         results.append(result)
         region_count = len(result["regions"]) if result["regions"] else 1
         total_regions += region_count
+        fallback_count += int(bool(result.get("used_line_split_fallback")))
         if progress.should_log(step):
             avg_regions = total_regions / step
             progress.log(
                 step,
-                f"images done {step} avg_regions {avg_regions:.1f} loss n/a accuracy n/a"
+                f"images done {step} avg_regions {avg_regions:.1f} line_split_fallbacks {fallback_count} loss n/a accuracy n/a"
                 " (no OCR labels provided)",
             )
 

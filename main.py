@@ -208,6 +208,12 @@ def mode_test_recognizer(args, device: torch.device) -> None:
 def mode_ocr_folder(args, device: torch.device) -> None:
     recognizer = build_recognizer(args, device)
     detector = None if args.skip_detector else build_detector(args, device)
+    if args.skip_detector and args.split_lines_without_detector:
+        print("ocr mode: detector skipped; splitting each page into line crops by image projection")
+    elif args.skip_detector:
+        print("ocr mode: detector skipped; each image is one recognizer crop")
+    else:
+        print("ocr mode: detector enabled with line-splitting fallback")
     results = run_ocr_folder(
         input_dir=args.input_dir,
         output_dir=args.output_dir,
@@ -223,6 +229,7 @@ def mode_ocr_folder(args, device: torch.device) -> None:
         rec_height=args.rec_height,
         rec_width=args.rec_width,
         log_every=args.log_every,
+        split_lines_without_detector=args.split_lines_without_detector,
     )
     print(f"wrote OCR for {len(results)} image(s) to {args.output_dir}")
 
@@ -310,6 +317,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--rec_width", type=int, default=DEFAULT_RECOGNIZER_WIDTH)
     parser.add_argument("--threshold", type=float, default=0.35)
     parser.add_argument("--skip_detector", action="store_true")
+    parser.add_argument("--split_lines_without_detector", action="store_true")
     parser.add_argument("--save_crops", action="store_true")
     parser.add_argument("--save_visualizations", action="store_true")
 
@@ -364,6 +372,8 @@ def main() -> None:
     elif args.mode == "ocr_folder":
         if not args.input_dir or not args.recognizer_ckpt:
             raise ValueError("--input_dir and --recognizer_ckpt are required for ocr_folder")
+        if args.split_lines_without_detector and not args.skip_detector:
+            raise ValueError("--split_lines_without_detector is only used together with --skip_detector")
         if not args.skip_detector and not args.detector_ckpt:
             raise ValueError("--detector_ckpt is required for full-page OCR. Use --skip_detector for cropped inputs.")
         mode_ocr_folder(args, device)
