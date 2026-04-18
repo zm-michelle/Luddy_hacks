@@ -57,6 +57,19 @@ OFFICE_WORDS = [
     "version",
 ]
 
+PARAGRAPH_SENTENCES = [
+    "There are several classic spatial filters for reducing image noise from scanned documents.",
+    "The mean filter and the median filter replace each pixel using information from the neighborhood.",
+    "This procedure reduces image noise but blurs the image and changes the appearance of small letters.",
+    "The main goal was to train a neural network in a supervised way to recover a clean image from a noisy one.",
+    "In this particular case, it was much easier to restore a noisy image from a clean one than to clean every image manually.",
+    "A new printed document collection has recently been prepared for experiments with degraded office images.",
+    "The database contains pages with several typefaces, font sizes, emphasized text, stains, folds, and low contrast.",
+    "First of all, most documents do not contain the same amount of text or the same line spacing.",
+    "Another important reason was to create restricted tasks commonly used in document analysis and recognition.",
+    "The forms also contain a brief set of instructions given to the reader before the document was scanned.",
+]
+
 
 @dataclass
 class DegradationConfig:
@@ -76,7 +89,7 @@ class DegradationConfig:
 class FontResolver:
     def __init__(self) -> None:
         self._font_paths = self._scan_fonts()
-        self._cache: dict[tuple[str, int, bool], ImageFont.FreeTypeFont | ImageFont.ImageFont] = {}
+        self._cache: dict[tuple[str, int, bool, bool], ImageFont.FreeTypeFont | ImageFont.ImageFont] = {}
 
     def _scan_fonts(self) -> list[Path]:
         paths: list[Path] = []
@@ -87,27 +100,43 @@ class FontResolver:
                 paths.extend(root.rglob("*.ttc"))
         return paths
 
-    def _find_path(self, family: str, bold: bool = False) -> Path | None:
+    def _find_path(self, family: str, bold: bool = False, italic: bool = False) -> Path | None:
         names = FONT_FAMILIES.get(family, FONT_FAMILIES["serif"])
+        preferred_styles: list[tuple[bool, bool]] = [(bold, italic)]
+        if italic:
+            preferred_styles.append((False, True))
+        if bold:
+            preferred_styles.append((True, False))
+        preferred_styles.append((False, False))
         for name in names:
             hints = FONT_FILE_HINTS.get(name, [name.lower()])
-            for path in self._font_paths:
-                normalized = path.name.lower().replace("-", " ").replace("_", " ")
-                if any(hint.lower().replace("-", " ").replace("_", " ") in normalized for hint in hints):
-                    if bold and "bold" not in normalized:
+            for want_bold, want_italic in preferred_styles:
+                for path in self._font_paths:
+                    normalized = path.name.lower().replace("-", " ").replace("_", " ")
+                    if not any(hint.lower().replace("-", " ").replace("_", " ") in normalized for hint in hints):
                         continue
-                    return path
-            for path in self._font_paths:
-                normalized = path.name.lower().replace("-", " ").replace("_", " ")
-                if any(hint.lower().replace("-", " ").replace("_", " ") in normalized for hint in hints):
+                    has_bold = "bold" in normalized
+                    has_italic = "italic" in normalized or "oblique" in normalized
+                    if want_bold and not has_bold:
+                        continue
+                    if want_italic and not has_italic:
+                        continue
+                    if not want_bold and bold and has_bold:
+                        continue
                     return path
         return None
 
-    def get(self, family: str, size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-        key = (family, size, bold)
+    def get(
+        self,
+        family: str,
+        size: int,
+        bold: bool = False,
+        italic: bool = False,
+    ) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+        key = (family, size, bold, italic)
         if key in self._cache:
             return self._cache[key]
-        path = self._find_path(family, bold=bold)
+        path = self._find_path(family, bold=bold, italic=italic)
         try:
             font = ImageFont.truetype(str(path), size=size) if path else ImageFont.load_default()
         except OSError:
@@ -145,14 +174,79 @@ def _random_line(max_words: int) -> str:
     return line
 
 
+def _paragraph_words() -> list[str]:
+    sentences = random.sample(PARAGRAPH_SENTENCES, k=random.randint(4, 7))
+    if random.random() < 0.35:
+        sentences.append(random.choice(PARAGRAPH_SENTENCES))
+    return " ".join(sentences).split()
+
+
+def _wrap_words_to_lines(
+    draw: ImageDraw.ImageDraw,
+    font: ImageFont.ImageFont,
+    target_width: int,
+    n_lines: int,
+) -> list[str]:
+    words = _paragraph_words()
+    lines: list[str] = []
+    cursor = 0
+    for _ in range(n_lines):
+        if cursor >= len(words):
+            words.extend(_paragraph_words())
+        line_words: list[str] = []
+        while cursor < len(words):
+            candidate = " ".join(line_words + [words[cursor]])
+            if line_words and _text_bbox(draw, candidate, font)[0] > target_width:
+                break
+            line_words.append(words[cursor])
+            cursor += 1
+        line = " ".join(line_words)
+        if random.random() < 0.18:
+            line = "  ".join(line.split(" ", 1)) if " " in line else line
+        lines.append(line)
+    return lines
+
+
 def _text_bbox(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> tuple[int, int]:
     box = draw.textbbox((0, 0), text, font=font)
     return box[2] - box[0], box[3] - box[1]
 
 
+def _add_paper_texture(image: Image.Image, strength: float = 0.55) -> Image.Image:
+    arr = np.asarray(image).astype(np.float32)
+    h, w = arr.shape
+    fine = np.random.normal(0, 4.5 * strength, arr.shape)
+    coarse_small = np.random.normal(0, 11 * strength, (max(2, h // 18), max(2, w // 18))).astype(np.float32)
+    coarse = cv2.resize(coarse_small, (w, h), interpolation=cv2.INTER_CUBIC)
+    arr += fine + coarse
+    return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
+
+
+def _add_fold_or_wrinkle(image: Image.Image, strength: float = 0.45) -> Image.Image:
+    arr = np.asarray(image).astype(np.float32)
+    h, w = arr.shape
+    for _ in range(random.randint(1, 3)):
+        if random.random() < 0.55:
+            center = random.randint(0, w - 1)
+            width = random.uniform(8, 28)
+            x = np.arange(w)[None, :]
+            shadow = np.exp(-((x - center) ** 2) / (2 * width**2))
+            arr -= shadow * random.uniform(10, 28) * strength
+        else:
+            center = random.randint(0, h - 1)
+            width = random.uniform(5, 18)
+            y = np.arange(h)[:, None]
+            shadow = np.exp(-((y - center) ** 2) / (2 * width**2))
+            arr -= shadow * random.uniform(8, 22) * strength
+    return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
+
+
 def _apply_degradation(image: Image.Image, cfg: DegradationConfig) -> Image.Image:
     s = max(0.0, min(1.0, cfg.severity))
     out = image.convert("L")
+    out = _add_paper_texture(out, strength=0.35 + s * 0.45)
+    if random.random() < 0.40:
+        out = _add_fold_or_wrinkle(out, strength=s)
     if cfg.faded_print and random.random() < 0.65:
         arr = np.asarray(out).astype(np.float32)
         dark = arr < 180
@@ -224,7 +318,12 @@ def _crop_page_edges(
         if nx2 - nx1 >= 8 and ny2 - ny1 >= 8:
             new_line = dict(line)
             text_x = line.get("origin", [x1, y1])[0]
-            font = resolver.get(line["font_family"], line["font_size"], line["bold_like"])
+            font = resolver.get(
+                line["font_family"],
+                line["font_size"],
+                line["bold_like"],
+                line.get("italic_like", False),
+            )
             text_width = int(font.getlength(line["text"]))
             visible_left = max(0, left - text_x)
             visible_right = min(text_width, right - text_x)
@@ -240,58 +339,91 @@ def _draw_document(
     min_lines: int,
     max_lines: int,
     resolver: FontResolver,
+    render_profile: str = "noisyoffice",
 ) -> tuple[Image.Image, list[dict]]:
     width, height = page_size
-    image = Image.new("L", (width, height), 255)
+    background = random.randint(232, 247) if render_profile == "noisyoffice" else 255
+    image = Image.new("L", (width, height), background)
     draw = ImageDraw.Draw(image)
-    family = random.choice(list(FONT_FAMILIES))
-    style = random.choices(["footnote", "normal", "large"], weights=[0.18, 0.68, 0.14])[0]
-    font_size = _font_size_for_style(style)
-    bold = random.random() < 0.22
-    font = resolver.get(family, font_size, bold=bold)
 
-    margin_x = random.randint(max(18, width // 28), max(24, width // 10))
-    margin_top = random.randint(max(18, height // 32), max(32, height // 10))
-    line_gap = random.randint(max(4, font_size // 4), max(8, font_size))
-    line_height = font_size + line_gap
-    usable_h = height - margin_top - random.randint(24, 90)
-    max_fit = max(min_lines, min(max_lines, usable_h // max(1, line_height)))
-    n_lines = random.randint(min_lines, max(min_lines, max_fit))
+    if render_profile == "noisyoffice":
+        family = random.choices(["serif", "sans", "typewriter"], weights=[0.50, 0.30, 0.20])[0]
+        style = random.choices(["footnote", "normal", "large"], weights=[0.22, 0.68, 0.10])[0]
+        font_size = {"footnote": random.randint(14, 16), "normal": random.randint(17, 20), "large": random.randint(20, 23)}[style]
+        bold = random.random() < 0.18
+        italic = family == "serif" and random.random() < 0.65
+        font = resolver.get(family, font_size, bold=bold, italic=italic)
+        target_min = max(8, min_lines)
+        target_max = max(target_min, min(10, max_lines))
+        n_lines = random.randint(target_min, target_max)
+        line_height = font_size + random.randint(8, 12)
+        y = random.randint(-3, 5)
+        wrap_width = random.randint(int(width * 0.96), int(width * 1.18))
+        source_lines = _wrap_words_to_lines(draw, font, wrap_width, n_lines)
+        x_base = random.randint(-22, 26)
+    else:
+        family = random.choice(list(FONT_FAMILIES))
+        style = random.choices(["footnote", "normal", "large"], weights=[0.18, 0.68, 0.14])[0]
+        font_size = _font_size_for_style(style)
+        bold = random.random() < 0.22
+        italic = False
+        font = resolver.get(family, font_size, bold=bold)
+        margin_x = random.randint(max(18, width // 28), max(24, width // 10))
+        margin_top = random.randint(max(18, height // 32), max(32, height // 10))
+        line_gap = random.randint(max(4, font_size // 4), max(8, font_size))
+        line_height = font_size + line_gap
+        usable_h = height - margin_top - random.randint(24, 90)
+        max_fit = max(min_lines, min(max_lines, usable_h // max(1, line_height)))
+        n_lines = random.randint(min_lines, max(min_lines, max_fit))
+        y = margin_top
+        source_lines = [_random_line(max_words={"dense": 13, "normal": 10, "loose": 7}[random.choice(["dense", "normal", "loose"])]) for _ in range(n_lines)]
+        x_base = margin_x
 
-    y = margin_top
     lines: list[dict] = []
-    density = random.choice(["dense", "normal", "loose"])
-    max_words = {"dense": 13, "normal": 10, "loose": 7}[density]
 
-    for _ in range(n_lines):
-        text = _random_line(max_words=max_words)
+    for raw_text in source_lines:
+        text = raw_text
         text_w, text_h = _text_bbox(draw, text, font)
-        max_text_w = width - 2 * margin_x
-        while text_w > max_text_w and " " in text:
-            text = " ".join(text.split()[:-1])
-            text_w, text_h = _text_bbox(draw, text, font)
-        x_jitter = random.randint(-8, 12)
-        x = max(2, margin_x + x_jitter)
-        if random.random() < 0.10:
-            x += random.randint(10, 45)
-        draw.text((x, y), text, fill=random.randint(0, 45), font=font)
-        pad = random.randint(2, 5)
+        if render_profile == "document":
+            max_text_w = width - 2 * x_base
+            while text_w > max_text_w and " " in text:
+                text = " ".join(text.split()[:-1])
+                text_w, text_h = _text_bbox(draw, text, font)
+
+        x = x_base + random.randint(-8, 12)
+        if render_profile == "document":
+            x = max(2, x)
+            if random.random() < 0.10:
+                x += random.randint(10, 45)
+
+        fill = random.randint(12, 55) if render_profile == "noisyoffice" else random.randint(0, 45)
+        draw.text((x, y), text, fill=fill, font=font)
+        visible_left = max(0, -x)
+        visible_right = min(int(font.getlength(text)), width - x)
+        visible_text = _visible_substring(text, font, visible_left, visible_right)
+        if not visible_text:
+            y += line_height + random.randint(-1, 2)
+            continue
+        pad = random.randint(1, 3) if render_profile == "noisyoffice" else random.randint(2, 5)
+        bx1 = max(0, x - pad)
+        by1 = max(0, y - pad)
+        bx2 = min(width, x + text_w + pad)
+        by2 = min(height, y + text_h + pad)
+        if bx2 <= bx1 or by2 <= by1:
+            y += line_height + (random.randint(-1, 2) if render_profile == "noisyoffice" else random.randint(-2, 6))
+            continue
         lines.append(
             {
-                "text": text,
-                "box": [
-                    max(0, x - pad),
-                    max(0, y - pad),
-                    min(width, x + text_w + pad),
-                    min(height, y + text_h + pad),
-                ],
+                "text": visible_text,
+                "box": [bx1, by1, bx2, by2],
                 "font_family": family,
                 "font_size": font_size,
                 "bold_like": bold,
-                "origin": [x, y],
+                "italic_like": italic,
+                "origin": [max(0, x), y],
             }
         )
-        y += line_height + random.randint(-2, 6)
+        y += line_height + (random.randint(-1, 2) if render_profile == "noisyoffice" else random.randint(-2, 6))
     return image, lines
 
 
@@ -316,6 +448,7 @@ def generate_synthetic_dataset(
     preview_count: int = 12,
     seed: int | None = None,
     log_every: int = 100,
+    render_profile: str = "noisyoffice",
 ) -> dict[str, Path]:
     if seed is not None:
         random.seed(seed)
@@ -336,7 +469,7 @@ def generate_synthetic_dataset(
     progress = ProgressLogger("synthetic generation", num_samples, log_every)
 
     for idx in range(num_samples):
-        clean, lines = _draw_document(page_size, min_lines, max_lines, resolver)
+        clean, lines = _draw_document(page_size, min_lines, max_lines, resolver, render_profile)
         clean, lines = _crop_page_edges(clean, lines, page_crop_prob, resolver)
         degraded = _apply_degradation(clean, degradation)
         page_name = f"page_{idx:06d}.png"
@@ -358,7 +491,12 @@ def generate_synthetic_dataset(
                     cut_left = random.randint(0, max(1, int(crop.width * 0.20)))
                     cut_right = crop.width - random.randint(0, max(1, int(crop.width * 0.20)))
                     if cut_right - cut_left >= 20:
-                        font = resolver.get(line["font_family"], line["font_size"], line["bold_like"])
+                        font = resolver.get(
+                            line["font_family"],
+                            line["font_size"],
+                            line["bold_like"],
+                            line.get("italic_like", False),
+                        )
                         text = _visible_substring(text, font, cut_left, cut_right)
                         crop = crop.crop((cut_left, 0, cut_right, crop.height))
                 if text:
@@ -394,6 +532,7 @@ def generate_synthetic_dataset(
                 "page_size": page_size,
                 "min_lines": min_lines,
                 "max_lines": max_lines,
+                "render_profile": render_profile,
                 "degradation": asdict(degradation),
             },
             indent=2,

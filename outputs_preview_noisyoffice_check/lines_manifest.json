@@ -1,0 +1,92 @@
+{
+  "samples": [
+    {
+      "image": "line_crops/page_000000_line_00.png",
+      "text": "he mean filter and the median filter replace each pixel using informa",
+      "source_page": "pages/page_000000.png",
+      "box": [
+        0,
+        0,
+        540,
+        17
+      ]
+    },
+    {
+      "image": "line_crops/page_000000_line_01.png",
+      "text": "from the neighborhood. This procedure reduces image noise but blu",
+      "source_page": "pages/page_000000.png",
+      "box": [
+        2,
+        23,
+        540,
+        42
+      ]
+    },
+    {
+      "image": "line_crops/page_000000_line_02.png",
+      "text": "mage and changes the appearance of small letters. In this particular",
+      "source_page": "pages/page_000000.png",
+      "box": [
+        0,
+        48,
+        540,
+        71
+      ]
+    },
+    {
+      "image": "line_crops/page_000000_line_03.png",
+      "text": "ase, it was much easier to restore a noisy image from a clean one th",
+      "source_page": "pages/page_000000.png",
+      "box": [
+        0,
+        75,
+        540,
+        98
+      ]
+    },
+    {
+      "image": "line_crops/page_000000_line_04.png",
+      "text": " clean every image manually. A new printed document collection ha",
+      "source_page": "pages/page_000000.png",
+      "box": [
+        0,
+        105,
+        540,
+        126
+      ]
+    },
+    {
+      "image": "line_crops/page_000000_line_05.png",
+      "text": "recently been prepared for experiments with degraded office image",
+      "source_page": "pages/page_000000.png",
+      "box": [
+        1,
+        133,
+        540,
+        154
+      ]
+    },
+    {
+      "image": "line_crops/page_000000_line_06.png",
+      "text": "The  mean filter and the median filter replace each pixel using inform",
+      "source_page": "pages/page_000000.png",
+      "box": [
+        0,
+        160,
+        540,
+        181
+      ]
+    },
+    {
+      "image": "line_crops/page_000000_line_07.png",
+      "text": "from the neighborhood. Another important reason was to create res",
+      "source_page": "pages/page_000000.png",
+      "box": [
+        5,
+        188,
+        540,
+        209
+      ]
+    }
+  ]
+}

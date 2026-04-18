@@ -45,13 +45,14 @@ This creates:
 - `synthetic_docs/lines_manifest.json` for recognizer training
 - `synthetic_docs/previews/*_boxes.png` for quick inspection
 
-Synthetic pages default to 7-14 mostly upright printed lines, constrained office-style fonts, PNG output, and configurable degradations.
+Synthetic pages default to a NoisyOffice-like `540x258` dense paragraph patch: usually 8-10 mostly upright printed lines, tight spacing, constrained office-style fonts, PNG output, gray paper texture, edge clipping, and configurable degradations.
 
 Useful variants:
 
 ```bash
 python main.py --mode generate_synth_data --output_dir synthetic_docs_small --num_samples 50 --preview_count 20
 python main.py --mode generate_synth_data --output_dir synthetic_clean --num_samples 1000 --no_stains --no_smudges --degradation_severity 0.3
+python main.py --mode generate_synth_data --output_dir synthetic_full_pages --render_profile document --page_size 768x1024 --max_lines 14
 ```
 
 ## Train Detector
@@ -154,6 +155,8 @@ Outputs:
 - `predictions.json`
 - optional `crops/<image>/region_*.png`
 - optional `visualizations/*_boxes.png` and `*_prob.png`
+
+Training, generation, validation, OCR, and benchmark modes print concise progress with ETA. Training/validation logs include loss plus task metrics: detector precision/recall/F1, recognizer CER/WER/exact match where labels exist. Folder OCR logs image progress and region counts; OCR accuracy is reported as unavailable unless you provide transcripts.
 
 ## Benchmark
 

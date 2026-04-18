@@ -103,6 +103,8 @@ def mode_generate(args) -> None:
         degradation=cfg,
         preview_count=args.preview_count,
         seed=args.seed,
+        log_every=args.log_every,
+        render_profile=args.render_profile,
     )
     print("synthetic data written:")
     for name, path in paths.items():
@@ -237,7 +239,15 @@ def mode_benchmark(args, device: torch.device) -> None:
 
 def mode_smoke_test(args, device: torch.device) -> None:
     smoke_dir = Path(args.output_dir) / "smoke_synth"
-    generate_synthetic_dataset(smoke_dir, num_samples=2, page_size=(480, 640), preview_count=2, seed=args.seed)
+    generate_synthetic_dataset(
+        smoke_dir,
+        num_samples=2,
+        page_size=args.page_size,
+        preview_count=2,
+        seed=args.seed,
+        log_every=1,
+        render_profile=args.render_profile,
+    )
 
     detector = DBNet().to(device)
     recognizer = CRNNRecognizer().to(device)
@@ -306,11 +316,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--num_samples", type=int, default=5000)
     parser.add_argument("--page_size", type=parse_size, default=DEFAULT_PAGE_SIZE)
     parser.add_argument("--min_lines", type=int, default=7)
-    parser.add_argument("--max_lines", type=int, default=14)
+    parser.add_argument("--max_lines", type=int, default=10)
     parser.add_argument("--preview_count", type=int, default=12)
     parser.add_argument("--no_line_crops", action="store_true")
     parser.add_argument("--line_crop_truncation_prob", type=float, default=0.20)
-    parser.add_argument("--page_crop_prob", type=float, default=0.20)
+    parser.add_argument("--page_crop_prob", type=float, default=0.35)
+    parser.add_argument("--render_profile", choices=["noisyoffice", "document"], default="noisyoffice")
     parser.add_argument("--degradation_severity", type=float, default=0.7)
     parser.add_argument("--compression", action="store_true")
     parser.add_argument("--no_gaussian_noise", action="store_true")

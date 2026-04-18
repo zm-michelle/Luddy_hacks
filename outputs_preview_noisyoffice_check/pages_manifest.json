@@ -1,0 +1,195 @@
+{
+  "pages": [
+    {
+      "image": "pages/page_000000.png",
+      "boxes": [
+        [
+          0,
+          0,
+          540,
+          17
+        ],
+        [
+          2,
+          23,
+          540,
+          42
+        ],
+        [
+          0,
+          48,
+          540,
+          71
+        ],
+        [
+          0,
+          75,
+          540,
+          98
+        ],
+        [
+          0,
+          105,
+          540,
+          126
+        ],
+        [
+          1,
+          133,
+          540,
+          154
+        ],
+        [
+          0,
+          160,
+          540,
+          181
+        ],
+        [
+          5,
+          188,
+          540,
+          209
+        ]
+      ],
+      "lines": [
+        {
+          "text": "he mean filter and the median filter replace each pixel using informa",
+          "box": [
+            0,
+            0,
+            540,
+            17
+          ],
+          "font_family": "sans",
+          "font_size": 18,
+          "bold_like": false,
+          "italic_like": false,
+          "origin": [
+            0,
+            -2
+          ]
+        },
+        {
+          "text": "from the neighborhood. This procedure reduces image noise but blu",
+          "box": [
+            2,
+            23,
+            540,
+            42
+          ],
+          "font_family": "sans",
+          "font_size": 18,
+          "bold_like": false,
+          "italic_like": false,
+          "origin": [
+            3,
+            24
+          ]
+        },
+        {
+          "text": "mage and changes the appearance of small letters. In this particular",
+          "box": [
+            0,
+            48,
+            540,
+            71
+          ],
+          "font_family": "sans",
+          "font_size": 18,
+          "bold_like": false,
+          "italic_like": false,
+          "origin": [
+            0,
+            51
+          ]
+        },
+        {
+          "text": "ase, it was much easier to restore a noisy image from a clean one th",
+          "box": [
+            0,
+            75,
+            540,
+            98
+          ],
+          "font_family": "sans",
+          "font_size": 18,
+          "bold_like": false,
+          "italic_like": false,
+          "origin": [
+            0,
+            78
+          ]
+        },
+        {
+          "text": " clean every image manually. A new printed document collection ha",
+          "box": [
+            0,
+            105,
+            540,
+            126
+          ],
+          "font_family": "sans",
+          "font_size": 18,
+          "bold_like": false,
+          "italic_like": false,
+          "origin": [
+            0,
+            107
+          ]
+        },
+        {
+          "text": "recently been prepared for experiments with degraded office image",
+          "box": [
+            1,
+            133,
+            540,
+            154
+          ],
+          "font_family": "sans",
+          "font_size": 18,
+          "bold_like": false,
+          "italic_like": false,
+          "origin": [
+            3,
+            135
+          ]
+        },
+        {
+          "text": "The  mean filter and the median filter replace each pixel using inform",
+          "box": [
+            0,
+            160,
+            540,
+            181
+          ],
+          "font_family": "sans",
+          "font_size": 18,
+          "bold_like": false,
+          "italic_like": false,
+          "origin": [
+            0,
+            162
+          ]
+        },
+        {
+          "text": "from the neighborhood. Another important reason was to create res",
+          "box": [
+            5,
+            188,
+            540,
+            209
+          ],
+          "font_family": "sans",
+          "font_size": 18,
+          "bold_like": false,
+          "italic_like": false,
+          "origin": [
+            7,
+            190
+          ]
+        }
+      ]
+    }
+  ]
+}
