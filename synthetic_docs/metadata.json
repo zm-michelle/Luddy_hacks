@@ -1,0 +1,24 @@
+{
+  "num_pages": 5000,
+  "num_line_crops": 43640,
+  "page_size": [
+    540,
+    258
+  ],
+  "min_lines": 7,
+  "max_lines": 10,
+  "render_profile": "noisyoffice",
+  "degradation": {
+    "gaussian_noise": true,
+    "salt_pepper": true,
+    "blur": true,
+    "low_contrast": true,
+    "uneven_illumination": true,
+    "smudges": true,
+    "stains": true,
+    "faded_print": true,
+    "speckle": true,
+    "compression": false,
+    "severity": 0.7
+  }
+}
