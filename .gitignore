@@ -1,0 +1,5 @@
+synthetic_docs
+checkpoints
+__pycache__
+.DS_Store
+myenv

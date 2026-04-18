@@ -1,0 +1,13 @@
+# Core deep learning
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Image processing
+Pillow>=9.0.0
+opencv-python>=4.7.0
+
+# Numerical
+numpy>=1.23.0
+
+# No spell correction, no language model — intentionally omitted.
+# If you later add beam-search with an LM, add kenlm or pyctcdecode here.
