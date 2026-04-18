@@ -64,6 +64,106 @@ def _merge_overlapping_boxes(boxes: list[tuple[int, int, int, int]], y_overlap: 
     return merged
 
 
+def _projection_runs(values: np.ndarray, threshold: float, max_gap: int = 2) -> list[tuple[int, int]]:
+    active = values > threshold
+    runs: list[tuple[int, int]] = []
+    start: int | None = None
+    last = -1
+    for idx, is_active in enumerate(active):
+        if is_active:
+            if start is None:
+                start = idx
+            last = idx
+        elif start is not None:
+            runs.append((start, last + 1))
+            start = None
+    if start is not None:
+        runs.append((start, last + 1))
+
+    if not runs:
+        return []
+    merged = [runs[0]]
+    for y1, y2 in runs[1:]:
+        prev_y1, prev_y2 = merged[-1]
+        if y1 - prev_y2 <= max_gap:
+            merged[-1] = (prev_y1, y2)
+        else:
+            merged.append((y1, y2))
+    return merged
+
+
+def _line_boxes_from_crop(
+    image: Image.Image,
+    box: tuple[int, int, int, int],
+    padding: int = 3,
+    min_height: int = 6,
+    min_width: int = 24,
+) -> list[tuple[int, int, int, int]]:
+    x1, y1, x2, y2 = box
+    crop = np.asarray(image.crop(box).convert("L"))
+    if crop.size == 0:
+        return []
+
+    blurred = cv2.GaussianBlur(crop, (3, 3), 0)
+    _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
+    row_counts = binary.sum(axis=1) / 255.0
+    if len(row_counts) >= 5:
+        row_counts = cv2.GaussianBlur(row_counts.reshape(-1, 1), (1, 5), 0).ravel()
+
+    threshold = max(2.0, crop.shape[1] * 0.018)
+    runs = _projection_runs(row_counts, threshold=threshold, max_gap=2)
+
+    line_boxes: list[tuple[int, int, int, int]] = []
+    for local_y1, local_y2 in runs:
+        if local_y2 - local_y1 < min_height:
+            continue
+        band = binary[local_y1:local_y2, :]
+        col_counts = band.sum(axis=0) / 255.0
+        col_runs = _projection_runs(col_counts, threshold=max(1.0, band.shape[0] * 0.08), max_gap=8)
+        if col_runs:
+            local_x1 = max(0, col_runs[0][0] - padding)
+            local_x2 = min(crop.shape[1], col_runs[-1][1] + padding)
+        else:
+            local_x1, local_x2 = 0, crop.shape[1]
+        if local_x2 - local_x1 < min_width:
+            continue
+        line_boxes.append(
+            (
+                max(0, x1 + local_x1),
+                max(0, y1 + local_y1 - padding),
+                min(image.width, x1 + local_x2),
+                min(image.height, y1 + local_y2 + padding),
+            )
+        )
+    return line_boxes
+
+
+def split_regions_into_lines(
+    image: Image.Image,
+    boxes: list[tuple[int, int, int, int]],
+    min_split_height: int = 42,
+    min_region_width: int = 40,
+    min_region_height: int = 8,
+) -> list[tuple[int, int, int, int]]:
+    line_boxes: list[tuple[int, int, int, int]] = []
+    for box in boxes:
+        x1, y1, x2, y2 = box
+        height = y2 - y1
+        if height >= min_split_height:
+            split = _line_boxes_from_crop(image, box)
+            if len(split) >= 2:
+                line_boxes.extend(split)
+                continue
+        line_boxes.append(box)
+    filtered = [
+        box
+        for box in line_boxes
+        if box[2] - box[0] >= min_region_width and box[3] - box[1] >= min_region_height
+    ]
+    return sort_boxes_reading_order(filtered)
+
+
 def detect_text_regions(
     detector: torch.nn.Module,
     image: Image.Image,
@@ -99,7 +199,8 @@ def detect_text_regions(
         x2 = min(original_w, x + w + padding)
         y2 = min(original_h, y + h + padding)
         boxes.append((x1, y1, x2, y2))
-    return _merge_overlapping_boxes(boxes), prob
+    merged = _merge_overlapping_boxes(boxes)
+    return split_regions_into_lines(original, merged), prob
 
 
 def recognize_crop(
@@ -162,6 +263,7 @@ def run_ocr_image(
         )
         if not boxes:
             boxes = [(0, 0, image.width, image.height)]
+        boxes = split_regions_into_lines(image, boxes)
 
     region_results: list[dict[str, Any]] = []
     texts: list[str] = []

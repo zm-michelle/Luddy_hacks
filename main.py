@@ -364,6 +364,8 @@ def main() -> None:
     elif args.mode == "ocr_folder":
         if not args.input_dir or not args.recognizer_ckpt:
             raise ValueError("--input_dir and --recognizer_ckpt are required for ocr_folder")
+        if not args.skip_detector and not args.detector_ckpt:
+            raise ValueError("--detector_ckpt is required for full-page OCR. Use --skip_detector for cropped inputs.")
         mode_ocr_folder(args, device)
     elif args.mode == "benchmark":
         mode_benchmark(args, device)

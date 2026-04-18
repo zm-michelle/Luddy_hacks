@@ -3,3 +3,5 @@ checkpoints
 __pycache__
 .DS_Store
 myenv
+outputs_preview_noisyoffice_check
+outputs_ocr_folder_smoke
